@@ -14,17 +14,18 @@ interface DashboardSummary {
   totalTransactions: number;
 }
 
+type ThemeMode = "light" | "dark";
+
 function money(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value ?? 0);
 }
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("petrova_token") : null;
   const response = await fetch(url, {
+    credentials: "include",
     ...init,
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers || {})
     }
   });
@@ -33,6 +34,13 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export default function PetrovaApp() {
+  const [theme, setTheme] = useState<ThemeMode>("light");
+  const [authChecked, setAuthChecked] = useState(false);
+  const [authenticated, setAuthenticated] = useState(false);
+  const [isDataLoading, setIsDataLoading] = useState(true);
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [authForm, setAuthForm] = useState({ email: "", password: "", workspaceName: "Workspace Principal" });
+  const [authError, setAuthError] = useState("");
   const [onboarding, setOnboarding] = useState<OnboardingData>({ completed: false });
   const [summary, setSummary] = useState<DashboardSummary>({ income: 0, expense: 0, transfers: 0, net: 0, totalTransactions: 0 });
   const [categories, setCategories] = useState<Array<{ name: string; value: number }>>([]);
@@ -51,38 +59,65 @@ export default function PetrovaApp() {
     }
   ]);
 
-  async function refreshData() {
-    const [ob, sum, cat, alertData, fileData, subsData, billsData] = await Promise.all([
-      api<OnboardingData>("/api/onboarding/status"),
-      api<DashboardSummary>("/api/dashboard/summary"),
-      api<Array<{ name: string; value: number }>>("/api/dashboard/categories"),
-      api<AlertRecord[]>("/api/alerts"),
-      api<UploadedFileRecord[]>("/api/files"),
-      api<SubscriptionRecord[]>("/api/subscriptions"),
-      api<BillRecord[]>("/api/bills")
-    ]);
-    setOnboarding(ob);
-    setSummary(sum);
-    setCategories(cat);
-    setAlerts(alertData);
-    setFiles(fileData);
-    setSubscriptions(subsData);
-    setBills(billsData);
+  async function refreshData(showSkeleton = true) {
+    if (showSkeleton) setIsDataLoading(true);
+    try {
+      const [ob, sum, cat, alertData, fileData, subsData, billsData] = await Promise.all([
+        api<OnboardingData>("/api/onboarding/status"),
+        api<DashboardSummary>("/api/dashboard/summary"),
+        api<Array<{ name: string; value: number }>>("/api/dashboard/categories"),
+        api<AlertRecord[]>("/api/alerts"),
+        api<UploadedFileRecord[]>("/api/files"),
+        api<SubscriptionRecord[]>("/api/subscriptions"),
+        api<BillRecord[]>("/api/bills")
+      ]);
+      setOnboarding(ob);
+      setSummary(sum);
+      setCategories(cat);
+      setAlerts(alertData);
+      setFiles(fileData);
+      setSubscriptions(subsData);
+      setBills(billsData);
+    } finally {
+      setIsDataLoading(false);
+    }
   }
 
   useEffect(() => {
+    const saved = localStorage.getItem("petrova_theme");
+    const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const mode: ThemeMode = saved === "dark" || saved === "light" ? (saved as ThemeMode) : systemDark ? "dark" : "light";
+    setTheme(mode);
+    document.documentElement.setAttribute("data-theme", mode);
+
     (async () => {
-      if (!localStorage.getItem("petrova_token")) {
-        const demo = await fetch("/api/auth/login", {
+      const meResponse = await fetch("/api/auth/me", { credentials: "include" });
+      if (meResponse.ok) {
+        setAuthenticated(true);
+        await refreshData();
+      } else if (process.env.NODE_ENV !== "production") {
+        await fetch("/api/auth/login", {
           method: "POST",
+          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ demo: true })
-        }).then((r) => r.json());
-        if (demo.token) localStorage.setItem("petrova_token", demo.token);
+        });
+        const retry = await fetch("/api/auth/me", { credentials: "include" });
+        if (retry.ok) {
+          setAuthenticated(true);
+          await refreshData();
+        }
       }
-      await refreshData();
+      setAuthChecked(true);
     })().catch(console.error);
   }, []);
+
+  function toggleTheme() {
+    const next = theme === "light" ? "dark" : "light";
+    setTheme(next);
+    document.documentElement.setAttribute("data-theme", next);
+    localStorage.setItem("petrova_theme", next);
+  }
 
   const latestChart = useMemo(() => {
     const withChart = [...messages].reverse().find((msg) => msg.chart);
@@ -105,21 +140,21 @@ export default function PetrovaApp() {
   async function handleUpload(file: File) {
     const formUpload = new FormData();
     formUpload.append("file", file);
-    const token = localStorage.getItem("petrova_token");
     const upload = await fetch("/api/files/upload", {
       method: "POST",
       body: formUpload,
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined
+      credentials: "include"
     }).then((r) => r.json());
-    await fetch(`/api/files/${upload.id}/process`, {
-      method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined
-    });
-    await fetch(`/api/files/${upload.id}/approve`, {
-      method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined
-    });
-    await refreshData();
+    // O processamento ocorre em background via fila; aprovacao agora e manual.
+    if (upload?.id) {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+    }
+    await refreshData(false);
+  }
+
+  async function approveFile(fileId: string) {
+    await api(`/api/files/${fileId}/approve`, { method: "POST" });
+    await refreshData(false);
   }
 
   async function sendMessage() {
@@ -134,7 +169,7 @@ export default function PetrovaApp() {
 
     setMessages((prev) => [...prev, answer]);
     setMessage("");
-    await refreshData();
+    await refreshData(false);
   }
 
   async function createBill() {
@@ -148,7 +183,7 @@ export default function PetrovaApp() {
       })
     });
     setNewBill({ beneficiary: "", amount: "", dueDate: "" });
-    await refreshData();
+    await refreshData(false);
   }
 
   async function exportMonthlyReport() {
@@ -163,9 +198,8 @@ export default function PetrovaApp() {
   }
 
   async function exportMonthlyPdf() {
-    const token = localStorage.getItem("petrova_token");
     const response = await fetch("/api/reports/monthly?format=pdf", {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined
+      credentials: "include"
     });
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
@@ -176,18 +210,119 @@ export default function PetrovaApp() {
     URL.revokeObjectURL(url);
   }
 
+  async function handleAuthSubmit() {
+    setAuthError("");
+    try {
+      if (authMode === "login") {
+        await api("/api/auth/login", {
+          method: "POST",
+          body: JSON.stringify({ email: authForm.email, password: authForm.password })
+        });
+      } else {
+        await api("/api/auth/register", {
+          method: "POST",
+          body: JSON.stringify(authForm)
+        });
+      }
+      setAuthenticated(true);
+      await refreshData();
+    } catch {
+      setAuthError("Nao foi possivel autenticar. Verifique os dados.");
+    }
+  }
+
+  async function logout() {
+    await api("/api/auth/logout", { method: "POST", body: "{}" });
+    setAuthenticated(false);
+    setOnboarding({ completed: false });
+    setMessages((prev) => prev.slice(0, 1));
+  }
+
+  if (!authChecked) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-slate-50">
+        <p className="text-sm text-slate-500">Preparando Petrova...</p>
+      </main>
+    );
+  }
+
+  if (!authenticated) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-gradient-to-b from-slate-50 to-slate-100 p-4">
+        <section className="card-premium w-full max-w-md p-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">Petrova</p>
+          <h1 className="mt-2 text-2xl font-semibold text-slate-900">Acesse sua central financeira</h1>
+          <p className="text-muted mt-1 text-sm">Experiencia simples, dados robustos e privacidade por padrao.</p>
+
+          <div className="mt-5 flex gap-2 rounded-xl bg-slate-100 p-1">
+            <button
+              onClick={() => setAuthMode("login")}
+              className={`w-1/2 rounded-lg py-2 text-sm transition ${authMode === "login" ? "bg-white font-medium shadow-sm" : "text-slate-600"}`}
+            >
+              Entrar
+            </button>
+            <button
+              onClick={() => setAuthMode("register")}
+              className={`w-1/2 rounded-lg py-2 text-sm transition ${authMode === "register" ? "bg-white font-medium shadow-sm" : "text-slate-600"}`}
+            >
+              Criar conta
+            </button>
+          </div>
+
+          <div className="mt-4 space-y-2">
+            <input
+              className="input-premium w-full p-2 text-sm"
+              placeholder="Email"
+              value={authForm.email}
+              onChange={(e) => setAuthForm((p) => ({ ...p, email: e.target.value }))}
+            />
+            <input
+              type="password"
+              className="input-premium w-full p-2 text-sm"
+              placeholder="Senha"
+              value={authForm.password}
+              onChange={(e) => setAuthForm((p) => ({ ...p, password: e.target.value }))}
+            />
+            {authMode === "register" && (
+              <input
+                className="input-premium w-full p-2 text-sm"
+                placeholder="Nome do workspace"
+                value={authForm.workspaceName}
+                onChange={(e) => setAuthForm((p) => ({ ...p, workspaceName: e.target.value }))}
+              />
+            )}
+            {authError && <p className="text-xs text-rose-600">{authError}</p>}
+            <button onClick={() => void handleAuthSubmit()} className="btn-primary w-full py-2 text-sm font-medium">
+              {authMode === "login" ? "Entrar" : "Criar conta e entrar"}
+            </button>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   return (
-    <main className="mx-auto min-h-screen max-w-7xl p-4 md:p-6">
-      <header className="mb-6 rounded-2xl bg-white p-5 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">Petrova</p>
-        <h1 className="mt-2 text-2xl font-bold text-slate-900">Copiloto financeiro simples por fora, poderoso por dentro</h1>
+    <main className="min-h-screen">
+      <header className="mx-auto mb-6 flex max-w-7xl items-center justify-between px-4 pt-6 md:px-6">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">Petrova</p>
+          <h1 className="mt-1 text-2xl font-semibold">Copiloto financeiro premium</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={toggleTheme} className="btn-ghost px-3 py-2 text-sm transition hover:scale-[1.02]">
+            {theme === "light" ? "Dark" : "Light"}
+          </button>
+          <button onClick={() => void logout()} className="btn-ghost px-3 py-2 text-sm transition hover:scale-[1.02]">
+            Sair
+          </button>
+        </div>
       </header>
 
       {!onboarding.completed ? (
-        <section className="grid gap-4 md:grid-cols-2">
-          <div className="rounded-2xl bg-white p-5 shadow-sm">
+        <section className="mx-auto grid max-w-5xl gap-4 px-4 pb-8 md:grid-cols-2 md:px-6">
+          <div className="card-premium p-6">
             <h2 className="text-lg font-semibold">Onboarding conversacional</h2>
-            <p className="mt-1 text-sm text-slate-600">
+            <p className="text-muted mt-1 text-sm">
               Responda o essencial e eu monto seu ambiente financeiro em menos de 1 minuto.
             </p>
             <form
@@ -196,63 +331,68 @@ export default function PetrovaApp() {
                 await handleOnboardingSubmit(formData);
               }}
             >
-              <input name="preferredName" placeholder="Como prefere ser chamado?" className="w-full rounded-xl border p-2" />
-              <select name="objective" className="w-full rounded-xl border p-2">
+              <input name="preferredName" placeholder="Como prefere ser chamado?" className="input-premium w-full p-2" />
+              <select name="objective" className="input-premium w-full p-2">
                 <option value="organizar_gastos">Organizar gastos</option>
                 <option value="patrimonio">Ver patrimonio</option>
                 <option value="investimentos">Controlar investimentos</option>
                 <option value="planejamento">Planejamento financeiro</option>
               </select>
-              <select name="useType" className="w-full rounded-xl border p-2">
+              <select name="useType" className="input-premium w-full p-2">
                 <option value="pf">Pessoa fisica</option>
                 <option value="familia">Familia</option>
                 <option value="pj">Pessoa juridica</option>
                 <option value="holding">Holding</option>
               </select>
-              <select name="startMode" className="w-full rounded-xl border p-2">
+              <select name="startMode" className="input-premium w-full p-2">
                 <option value="upload">Subir extrato</option>
                 <option value="integracao">Conectar contas</option>
                 <option value="manual">Cadastro manual</option>
                 <option value="conversa">Explorar primeiro</option>
               </select>
-              <select name="familiarity" className="w-full rounded-xl border p-2">
+              <select name="familiarity" className="input-premium w-full p-2">
                 <option value="basico">Basico</option>
                 <option value="intermediario">Intermediario</option>
                 <option value="avancado">Avancado</option>
               </select>
-              <button className="rounded-xl bg-brand-500 px-4 py-2 font-medium text-white">Comecar</button>
+              <button className="btn-primary px-4 py-2 font-medium">Continuar</button>
             </form>
           </div>
-          <div className="rounded-2xl bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold">O que este MVP ja faz</h2>
-            <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-700">
-              <li>Upload de CSV/Excel com parsing e classificacao inicial</li>
-              <li>Pipeline em staging com aprovacao antes do ledger oficial</li>
-              <li>Dashboard mensal de receitas, despesas e saldo</li>
-              <li>Chat com dados e geracao de grafico por intencao</li>
-              <li>Alertas de periodo incompleto e assinaturas</li>
-            </ul>
+          <div className="card-premium p-6">
+            <h2 className="text-lg font-semibold">Fluxo premium simplificado</h2>
+            <p className="text-muted mt-2 text-sm">Converse, envie arquivos e aprove transacoes em poucos cliques. Sem menus complexos.</p>
           </div>
         </section>
       ) : (
-        <section className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
+        <section className="mx-auto grid max-w-7xl gap-4 px-4 pb-8 lg:grid-cols-[1.35fr_1fr] md:px-6">
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <MetricCard label="Entradas" value={money(summary.income)} />
-              <MetricCard label="Saidas" value={money(summary.expense)} />
-              <MetricCard label="Saldo" value={money(summary.net)} />
-              <MetricCard label="Lancamentos" value={String(summary.totalTransactions)} />
+              {isDataLoading ? (
+                <>
+                  <MetricCardSkeleton />
+                  <MetricCardSkeleton />
+                  <MetricCardSkeleton />
+                  <MetricCardSkeleton />
+                </>
+              ) : (
+                <>
+                  <MetricCard label="Entradas" value={money(summary.income)} />
+                  <MetricCard label="Saidas" value={money(summary.expense)} />
+                  <MetricCard label="Saldo" value={money(summary.net)} />
+                  <MetricCard label="Lancamentos" value={String(summary.totalTransactions)} />
+                </>
+              )}
             </div>
 
-            <div className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="card-premium p-5">
               <h2 className="text-lg font-semibold">Upload Center</h2>
-              <p className="mt-1 text-sm text-slate-600">Envie CSV, Excel ou PDF para alimentar o dashboard automaticamente.</p>
-              <label className="mt-4 flex cursor-pointer items-center justify-center rounded-xl border border-dashed p-6 text-sm">
+              <p className="text-muted mt-1 text-sm">Envie CSV, Excel, PDF ou imagem. O processamento e assíncrono e seguro.</p>
+              <label className="mt-4 flex cursor-pointer items-center justify-center rounded-xl border border-dashed p-6 text-sm transition hover:scale-[1.01]">
                 Clique para enviar arquivo
                 <input
                   type="file"
                   className="hidden"
-                  accept=".csv,.xlsx,.xls,.pdf"
+                  accept=".csv,.xlsx,.xls,.pdf,.png,.jpg,.jpeg,.webp"
                   onChange={async (event) => {
                     const file = event.target.files?.[0];
                     if (file) await handleUpload(file);
@@ -261,50 +401,63 @@ export default function PetrovaApp() {
               </label>
               <div className="mt-4 space-y-2">
                 {files.slice(0, 4).map((file) => (
-                  <div key={file.id} className="rounded-lg border p-2 text-sm">
-                    <p className="font-medium">{file.filename}</p>
-                    <p className="text-slate-500">
-                      {file.status} • {file.parsedTransactions.length} lancamentos
-                    </p>
+                  <div key={file.id} className="rounded-lg border p-2 text-sm transition hover:scale-[1.01]">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="font-medium">{file.filename}</p>
+                        <p className="text-muted">
+                          {file.status} • {file.parsedTransactions.length} lancamentos
+                        </p>
+                      </div>
+                      {(file.status === "parsed" || file.status === "needs_review") && (
+                        <button onClick={() => void approveFile(file.id)} className="btn-primary px-2 py-1 text-xs">
+                          Aprovar
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
               <button
                 onClick={() => void exportMonthlyReport()}
-                className="mt-4 rounded-xl border border-brand-500 px-3 py-2 text-sm font-medium text-brand-700"
+                className="btn-ghost mt-4 px-3 py-2 text-sm font-medium text-brand-700 transition hover:scale-[1.02]"
               >
                 Exportar relatorio mensal (CSV)
               </button>
-              <button onClick={() => void exportMonthlyPdf()} className="ml-2 mt-4 rounded-xl bg-brand-500 px-3 py-2 text-sm font-medium text-white">
+              <button onClick={() => void exportMonthlyPdf()} className="btn-primary ml-2 mt-4 px-3 py-2 text-sm font-medium">
                 Exportar relatorio mensal (PDF)
               </button>
             </div>
 
-            <div className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="card-premium p-5">
               <h2 className="text-lg font-semibold">Visualizacao automatica</h2>
               <div className="mt-4 h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={categories} dataKey="value" nameKey="name" outerRadius={90}>
-                      {categories.map((entry, index) => (
-                        <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value) => money(Number(value))} />
-                  </PieChart>
-                </ResponsiveContainer>
+                {isDataLoading ? (
+                  <div className="skeleton h-full w-full" />
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={categories} dataKey="value" nameKey="name" outerRadius={90}>
+                        {categories.map((entry, index) => (
+                          <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value) => money(Number(value))} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
               </div>
             </div>
           </div>
 
           <div className="space-y-4">
-            <div className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="card-premium p-5">
               <h2 className="text-lg font-semibold">Copiloto (chat + dados)</h2>
               <div className="mt-3 max-h-72 space-y-2 overflow-y-auto pr-2">
                 {messages.map((msg) => (
                   <div
                     key={msg.id}
-                    className={`rounded-xl p-3 text-sm ${msg.role === "assistant" ? "bg-slate-100" : "bg-brand-50 text-brand-900"}`}
+                    className={`rounded-xl p-3 text-sm transition ${msg.role === "assistant" ? "bg-slate-100 dark:bg-slate-800" : "bg-brand-50 text-brand-900"}`}
                   >
                     {msg.content}
                   </div>
@@ -317,17 +470,17 @@ export default function PetrovaApp() {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") void sendMessage();
                   }}
-                  className="w-full rounded-xl border p-2 text-sm"
+                  className="input-premium w-full p-2 text-sm"
                   placeholder='Ex: "Quanto gastei com alimentacao?"'
                 />
-                <button onClick={() => void sendMessage()} className="rounded-xl bg-brand-500 px-3 text-sm text-white">
+                <button onClick={() => void sendMessage()} className="btn-primary px-3 text-sm">
                   Enviar
                 </button>
               </div>
             </div>
 
             {latestChart && (
-              <div className="rounded-2xl bg-white p-5 shadow-sm">
+              <div className="card-premium p-5">
                 <h3 className="text-sm font-semibold">{latestChart.title}</h3>
                 <div className="mt-3 h-52">
                   <ResponsiveContainer width="100%" height="100%">
@@ -342,64 +495,66 @@ export default function PetrovaApp() {
               </div>
             )}
 
-            <div className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="card-premium p-5">
               <h3 className="text-sm font-semibold">Alertas inteligentes</h3>
               <div className="mt-3 space-y-2">
-                {alerts.length === 0 && <p className="text-sm text-slate-500">Sem alertas no momento.</p>}
+                {alerts.length === 0 && <p className="text-muted text-sm">Sem alertas no momento.</p>}
                 {alerts.slice(0, 5).map((alert) => (
-                  <div key={alert.id} className="rounded-lg border p-2 text-sm">
+                  <div key={alert.id} className="rounded-lg border p-2 text-sm transition hover:scale-[1.01]">
                     <p className="font-medium">{alert.title}</p>
-                    <p className="text-slate-600">{alert.description}</p>
+                    <p className="text-muted">{alert.description}</p>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="card-premium p-5">
               <h3 className="text-sm font-semibold">Assinaturas detectadas</h3>
               <div className="mt-3 space-y-2">
-                {subscriptions.length === 0 && <p className="text-sm text-slate-500">Nenhuma assinatura detectada ainda.</p>}
+                {subscriptions.length === 0 && <p className="text-muted text-sm">Nenhuma assinatura detectada ainda.</p>}
                 {subscriptions.slice(0, 5).map((sub) => (
-                  <div key={sub.id} className="rounded-lg border p-2 text-sm">
+                  <div key={sub.id} className="rounded-lg border p-2 text-sm transition hover:scale-[1.01]">
                     <p className="font-medium">{sub.name}</p>
-                    <p className="text-slate-600">{money(sub.amount)} por {sub.frequency}</p>
+                    <p className="text-muted">
+                      {money(sub.amount)} por {sub.frequency}
+                    </p>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="card-premium p-5">
               <h3 className="text-sm font-semibold">Boletos e vencimentos</h3>
               <div className="mt-3 grid gap-2">
                 <input
                   value={newBill.beneficiary}
                   onChange={(e) => setNewBill((prev) => ({ ...prev, beneficiary: e.target.value }))}
-                  className="rounded-xl border p-2 text-sm"
+                  className="input-premium p-2 text-sm"
                   placeholder="Beneficiario"
                 />
                 <input
                   type="number"
                   value={newBill.amount}
                   onChange={(e) => setNewBill((prev) => ({ ...prev, amount: e.target.value }))}
-                  className="rounded-xl border p-2 text-sm"
+                  className="input-premium p-2 text-sm"
                   placeholder="Valor"
                 />
                 <input
                   type="date"
                   value={newBill.dueDate}
                   onChange={(e) => setNewBill((prev) => ({ ...prev, dueDate: e.target.value }))}
-                  className="rounded-xl border p-2 text-sm"
+                  className="input-premium p-2 text-sm"
                 />
-                <button onClick={() => void createBill()} className="rounded-xl bg-brand-500 px-3 py-2 text-sm text-white">
+                <button onClick={() => void createBill()} className="btn-primary px-3 py-2 text-sm">
                   Adicionar boleto
                 </button>
               </div>
               <div className="mt-3 space-y-2">
-                {bills.length === 0 && <p className="text-sm text-slate-500">Sem boletos cadastrados.</p>}
+                {bills.length === 0 && <p className="text-muted text-sm">Sem boletos cadastrados.</p>}
                 {bills.slice(0, 5).map((bill) => (
-                  <div key={bill.id} className="rounded-lg border p-2 text-sm">
+                  <div key={bill.id} className="rounded-lg border p-2 text-sm transition hover:scale-[1.01]">
                     <p className="font-medium">{bill.beneficiary}</p>
-                    <p className="text-slate-600">
+                    <p className="text-muted">
                       {money(bill.amount)} • vence em {new Date(bill.dueDate).toLocaleDateString("pt-BR")} • {bill.status}
                     </p>
                   </div>
@@ -415,9 +570,18 @@ export default function PetrovaApp() {
 
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl bg-white p-4 shadow-sm">
-      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
+    <div className="card-premium p-4">
+      <p className="text-muted text-xs uppercase tracking-wide">{label}</p>
       <p className="mt-2 text-xl font-semibold">{value}</p>
+    </div>
+  );
+}
+
+function MetricCardSkeleton() {
+  return (
+    <div className="card-premium p-4">
+      <div className="skeleton h-3 w-24" />
+      <div className="skeleton mt-3 h-7 w-28" />
     </div>
   );
 }

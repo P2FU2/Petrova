@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { checkPassword, ensureDemoContext, signToken } from "@/lib/auth";
+import { canUseDemoAuth, checkPassword, ensureDemoContext, setAuthCookie, signToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 const schema = z.object({
@@ -14,9 +14,13 @@ export async function POST(req: Request) {
   if (!payload.success) return NextResponse.json({ error: "Dados invalidos." }, { status: 400 });
 
   if (payload.data.demo) {
+    if (!canUseDemoAuth()) {
+      return NextResponse.json({ error: "Login demo desabilitado neste ambiente." }, { status: 403 });
+    }
     const demo = await ensureDemoContext();
+    const token = signToken(demo.userId, demo.workspaceId);
+    await setAuthCookie(token);
     return NextResponse.json({
-      token: signToken(demo.userId, demo.workspaceId),
       workspaceId: demo.workspaceId
     });
   }
@@ -34,5 +38,7 @@ export async function POST(req: Request) {
   const member = await prisma.workspaceMember.findFirst({ where: { userId: user.id }, orderBy: { createdAt: "asc" } });
   if (!member) return NextResponse.json({ error: "Usuario sem workspace." }, { status: 403 });
 
-  return NextResponse.json({ token: signToken(user.id, member.workspaceId), workspaceId: member.workspaceId });
+  const token = signToken(user.id, member.workspaceId);
+  await setAuthCookie(token);
+  return NextResponse.json({ workspaceId: member.workspaceId });
 }

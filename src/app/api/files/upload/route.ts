@@ -4,9 +4,10 @@ import { getAuthContext } from "@/lib/auth";
 import { detectDocumentType } from "@/lib/parser";
 import { createUploadedFile } from "@/lib/repository";
 import { enqueueFileProcessing } from "@/lib/queue";
+import { saveFileContent } from "@/lib/file-storage";
 
 export async function POST(req: NextRequest) {
-  const context = await getAuthContext(req, true);
+  const context = await getAuthContext(req, false);
   if (!context) return NextResponse.json({ error: "Nao autenticado." }, { status: 401 });
   const data = await req.formData();
   const file = data.get("file");
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
     filename: file.name,
     mimeType: file.type || "application/octet-stream",
     documentType: detectDocumentType(file.name),
-    blobBase64: Buffer.from(await file.arrayBuffer()).toString("base64")
+    blobBase64: await saveFileContent(file)
   });
 
   await enqueueFileProcessing({ fileId: record.id, context });

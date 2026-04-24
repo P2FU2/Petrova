@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { hashPassword, signToken } from "@/lib/auth";
+import { hashPassword, setAuthCookie, signToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 const schema = z.object({
@@ -38,5 +38,6 @@ export async function POST(req: Request) {
   });
 
   const token = signToken(user.id, workspace.id);
-  return NextResponse.json({ token, workspaceId: workspace.id });
+  await setAuthCookie(token);
+  return NextResponse.json({ workspaceId: workspace.id });
 }

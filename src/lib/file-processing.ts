@@ -1,6 +1,7 @@
 import { FileStatus } from "@prisma/client";
 import type { AuthContext } from "@/lib/auth";
 import { addAlert, getFile, setFileStatus, storeParsedTransactions } from "@/lib/repository";
+import { loadFileBuffer } from "@/lib/file-storage";
 import { parseBufferToTransactions } from "@/lib/parser";
 
 export async function processUploadedFile(context: AuthContext, fileId: string) {
@@ -9,7 +10,7 @@ export async function processUploadedFile(context: AuthContext, fileId: string) 
   if (!file.blobBase64) throw new Error("Arquivo sem conteudo para processamento");
 
   await setFileStatus(context, fileId, FileStatus.processing);
-  const buffer = Buffer.from(file.blobBase64, "base64");
+  const buffer = await loadFileBuffer(file.blobBase64);
   const parsed = await parseBufferToTransactions(buffer, file.filename, file.mimeType, fileId);
 
   const dates = parsed.map((tx) => new Date(tx.date).getTime()).filter((v) => Number.isFinite(v));

@@ -2,15 +2,108 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --bg: #f7f8fb;
+  --bg-soft: #ffffff;
+  --text: #0f172a;
+  --text-muted: #64748b;
+  --border: #e2e8f0;
+  --primary: #2f6df6;
+  --primary-strong: #1f52c4;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --shadow-soft: 0 10px 35px rgba(15, 23, 42, 0.08);
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+}
+
+:root[data-theme="dark"] {
+  --bg: #0b1220;
+  --bg-soft: #111a2e;
+  --text: #e2e8f0;
+  --text-muted: #94a3b8;
+  --border: #25324a;
+  --primary: #5f8cff;
+  --primary-strong: #7aa0ff;
+  --shadow-soft: 0 10px 35px rgba(2, 6, 23, 0.4);
+}
+
 html,
-body {
+body,
+#__next {
   margin: 0;
   padding: 0;
-  background: #f8fafc;
-  color: #0f172a;
+  background: var(--bg);
+  color: var(--text);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  transition: background-color 220ms ease, color 220ms ease;
 }
 
 * {
   box-sizing: border-box;
+}
+
+.card-premium {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-soft);
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.card-premium:hover {
+  transform: translateY(-1px);
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+.btn-primary {
+  border: 0;
+  border-radius: 12px;
+  background: var(--primary);
+  color: #fff;
+  transition: background-color 180ms ease, transform 180ms ease;
+}
+
+.btn-primary:hover {
+  background: var(--primary-strong);
+}
+
+.btn-primary:active {
+  transform: scale(0.98);
+}
+
+.btn-ghost {
+  border: 1px solid var(--border);
+  background: transparent;
+  border-radius: 12px;
+}
+
+.input-premium {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text);
+}
+
+.skeleton {
+  background: linear-gradient(90deg, rgba(148, 163, 184, 0.12) 25%, rgba(148, 163, 184, 0.24) 37%, rgba(148, 163, 184, 0.12) 63%);
+  background-size: 400% 100%;
+  animation: petrovaSkeleton 1.4s ease infinite;
+  border-radius: 12px;
+}
+
+@keyframes petrovaSkeleton {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
 }
