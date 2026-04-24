@@ -1,20 +1,23 @@
 import { NextResponse } from "next/server";
-import { approveFileTransactions, getFile, updateFile } from "@/lib/store";
+import type { NextRequest } from "next/server";
+import { getAuthContext } from "@/lib/auth";
+import { approveFileTransactions, getFile } from "@/lib/repository";
 
 interface Params {
   params: Promise<{ id: string }>;
 }
 
-export async function POST(_: Request, { params }: Params) {
+export async function POST(req: NextRequest, { params }: Params) {
+  const context = await getAuthContext(req, true);
+  if (!context) return NextResponse.json({ error: "Nao autenticado." }, { status: 401 });
   const { id } = await params;
-  const file = getFile(id);
+  const file = await getFile(context, id);
 
   if (!file) {
     return NextResponse.json({ error: "Arquivo nao encontrado." }, { status: 404 });
   }
 
-  const approved = approveFileTransactions(id);
-  updateFile(id, { status: "approved" });
+  const approved = await approveFileTransactions(context, id);
 
   return NextResponse.json({ approvedTransactions: approved });
 }

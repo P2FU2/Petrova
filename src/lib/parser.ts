@@ -51,7 +51,16 @@ function cleanDescription(raw: string) {
 
 export async function parseFileToTransactions(file: File, sourceFileId: string): Promise<ParsedTransaction[]> {
   const buffer = Buffer.from(await file.arrayBuffer());
-  const filename = file.name.toLowerCase();
+  return parseBufferToTransactions(buffer, file.name, file.type, sourceFileId);
+}
+
+export async function parseBufferToTransactions(
+  buffer: Buffer,
+  filenameRaw: string,
+  mimeType: string,
+  sourceFileId: string
+): Promise<ParsedTransaction[]> {
+  const filename = filenameRaw.toLowerCase();
 
   if (filename.endsWith(".csv")) {
     const content = buffer.toString("utf-8");
@@ -64,6 +73,10 @@ export async function parseFileToTransactions(file: File, sourceFileId: string):
 
   if (filename.endsWith(".pdf")) {
     return parsePdf(buffer, sourceFileId);
+  }
+
+  if (mimeType.startsWith("image/") || filename.endsWith(".png") || filename.endsWith(".jpg") || filename.endsWith(".jpeg") || filename.endsWith(".webp")) {
+    return parseImageWithOcr(buffer, sourceFileId);
   }
 
   return [];
@@ -177,6 +190,29 @@ async function parsePdf(buffer: Buffer, sourceFileId: string): Promise<ParsedTra
   }
 
   return txs;
+}
+
+async function parseImageWithOcr(buffer: Buffer, sourceFileId: string): Promise<ParsedTransaction[]> {
+  try {
+    const Tesseract = await import("tesseract.js");
+    const result = await Tesseract.recognize(buffer, "por");
+    const lines = result.data.text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    const syntheticCsv = ["date,description,amount"];
+    for (const line of lines.slice(0, 60)) {
+      const amountMatch = line.match(/(-?\d{1,3}(?:\.\d{3})*,\d{2})/);
+      if (!amountMatch) continue;
+      const today = new Date().toISOString().slice(0, 10);
+      const desc = line.replace(amountMatch[0], "").trim().replace(/,/g, " ");
+      syntheticCsv.push(`${today},${desc || "Lancamento OCR"},${amountMatch[0]}`);
+    }
+    return parseCsv(syntheticCsv.join("\n"), sourceFileId);
+  } catch {
+    return [];
+  }
 }
 
 export function detectDocumentType(filename: string) {

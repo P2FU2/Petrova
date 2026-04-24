@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { z } from "zod";
-import { updateOnboarding } from "@/lib/store";
+import { getAuthContext } from "@/lib/auth";
+import { updateOnboarding } from "@/lib/repository";
 
 const schema = z.object({
   preferredName: z.string().optional(),
@@ -10,12 +12,14 @@ const schema = z.object({
   familiarity: z.enum(["basico", "intermediario", "avancado"]).optional()
 });
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const context = await getAuthContext(req, true);
+  if (!context) return NextResponse.json({ error: "Nao autenticado." }, { status: 401 });
   const json = await req.json();
   const parsed = schema.safeParse(json);
   if (!parsed.success) {
     return NextResponse.json({ error: "Dados de onboarding invalidos." }, { status: 400 });
   }
-  const onboarding = updateOnboarding(parsed.data);
+  const onboarding = await updateOnboarding(context, parsed.data as Record<string, string>);
   return NextResponse.json(onboarding);
 }

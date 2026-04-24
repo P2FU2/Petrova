@@ -19,10 +19,12 @@ function money(value: number) {
 }
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("finance_os_token") : null;
   const response = await fetch(url, {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers || {})
     }
   });
@@ -69,7 +71,17 @@ export default function FinanceOsApp() {
   }
 
   useEffect(() => {
-    refreshData().catch(console.error);
+    (async () => {
+      if (!localStorage.getItem("finance_os_token")) {
+        const demo = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ demo: true })
+        }).then((r) => r.json());
+        if (demo.token) localStorage.setItem("finance_os_token", demo.token);
+      }
+      await refreshData();
+    })().catch(console.error);
   }, []);
 
   const latestChart = useMemo(() => {
@@ -93,11 +105,20 @@ export default function FinanceOsApp() {
   async function handleUpload(file: File) {
     const formUpload = new FormData();
     formUpload.append("file", file);
-    const upload = await fetch("/api/files/upload", { method: "POST", body: formUpload }).then((r) => r.json());
-    const processing = new FormData();
-    processing.append("file", file);
-    await fetch(`/api/files/${upload.id}/process`, { method: "POST", body: processing });
-    await fetch(`/api/files/${upload.id}/approve`, { method: "POST" });
+    const token = localStorage.getItem("finance_os_token");
+    const upload = await fetch("/api/files/upload", {
+      method: "POST",
+      body: formUpload,
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined
+    }).then((r) => r.json());
+    await fetch(`/api/files/${upload.id}/process`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined
+    });
+    await fetch(`/api/files/${upload.id}/approve`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined
+    });
     await refreshData();
   }
 
@@ -137,6 +158,20 @@ export default function FinanceOsApp() {
     const link = document.createElement("a");
     link.href = url;
     link.download = `finance-os-relatorio-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function exportMonthlyPdf() {
+    const token = localStorage.getItem("finance_os_token");
+    const response = await fetch("/api/reports/monthly?format=pdf", {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined
+    });
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `finance-os-relatorio-${new Date().toISOString().slice(0, 10)}.pdf`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -239,6 +274,9 @@ export default function FinanceOsApp() {
                 className="mt-4 rounded-xl border border-brand-500 px-3 py-2 text-sm font-medium text-brand-700"
               >
                 Exportar relatorio mensal (CSV)
+              </button>
+              <button onClick={() => void exportMonthlyPdf()} className="ml-2 mt-4 rounded-xl bg-brand-500 px-3 py-2 text-sm font-medium text-white">
+                Exportar relatorio mensal (PDF)
               </button>
             </div>
 

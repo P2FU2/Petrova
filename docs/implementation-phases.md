@@ -60,12 +60,14 @@
 - PWA base.
 
 ### MVP 2
-- Parser PDF (basico) ja implementado; OCR pendente.
-- Modulo inicial de assinaturas ja implementado.
-- Modulo inicial de boletos ja implementado.
-- Relatorio mensal em CSV estruturado ja implementado.
-- Autenticacao real + RBAC pendentes.
-- Persistencia total em PostgreSQL pendente (schema pronto).
+- Parser PDF (basico) implementado.
+- OCR inicial para imagens/prints implementado.
+- Modulo inicial de assinaturas implementado.
+- Modulo inicial de boletos implementado.
+- Relatorio mensal em CSV e PDF implementado.
+- Autenticacao (register/login/me) e RBAC por membership de workspace implementados.
+- Persistencia principal no PostgreSQL via Prisma implementada.
+- Fila assincorna com BullMQ/Redis implementada (com fallback local sem Redis).
 
 ### MVP 3
 - Patrimonio completo (ativos/passivos/investimentos).

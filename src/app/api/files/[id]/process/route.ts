@@ -1,61 +1,24 @@
 import { NextResponse } from "next/server";
-import { addAlert, addStagedTransactions, getFile, updateFile } from "@/lib/store";
-import { parseFileToTransactions } from "@/lib/parser";
+import type { NextRequest } from "next/server";
+import { getAuthContext } from "@/lib/auth";
+import { processUploadedFile } from "@/lib/file-processing";
 
 interface Params {
   params: Promise<{ id: string }>;
 }
 
-export async function POST(req: Request, { params }: Params) {
+export async function POST(request: NextRequest, { params }: Params) {
+  const context = await getAuthContext(request, true);
+  if (!context) return NextResponse.json({ error: "Nao autenticado." }, { status: 401 });
   const { id } = await params;
-  const fileRecord = getFile(id);
-
-  if (!fileRecord) {
-    return NextResponse.json({ error: "Arquivo nao encontrado." }, { status: 404 });
-  }
-
-  const data = await req.formData();
-  const file = data.get("file");
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: "Arquivo obrigatorio para processamento." }, { status: 400 });
-  }
-
-  updateFile(id, { status: "processing" });
-  const parsed = await parseFileToTransactions(file, id);
-
-  const dates = parsed.map((tx) => new Date(tx.date).getTime()).filter((v) => Number.isFinite(v));
-  const minDate = dates.length ? new Date(Math.min(...dates)).toISOString() : undefined;
-  const maxDate = dates.length ? new Date(Math.max(...dates)).toISOString() : undefined;
-  const needsReview = parsed.some((tx) => tx.needsReview);
-  const subscriptions = parsed.filter((tx) => tx.isSubscription);
-
-  addStagedTransactions(parsed);
-  updateFile(id, {
-    status: needsReview ? "needs_review" : "parsed",
-    parsedTransactions: parsed,
-    periodStart: minDate,
-    periodEnd: maxDate
-  });
-
-  if (minDate && maxDate && minDate.slice(0, 7) === maxDate.slice(0, 7)) {
-    addAlert({
-      type: "period_incomplete",
-      title: "Periodo potencialmente incompleto",
-      description: `Dados enviados cobrem somente ${minDate.slice(0, 7)}.`
+  try {
+    const result = await processUploadedFile(context, id);
+    return NextResponse.json({
+      fileId: id,
+      transactionsFound: result.transactionsFound,
+      needsReview: result.needsReview
     });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Falha no processamento." }, { status: 400 });
   }
-
-  if (subscriptions.length > 0) {
-    addAlert({
-      type: "subscription_detected",
-      title: "Assinaturas detectadas",
-      description: `Detectamos ${subscriptions.length} lancamentos com padrao recorrente.`
-    });
-  }
-
-  return NextResponse.json({
-    fileId: id,
-    transactionsFound: parsed.length,
-    needsReview
-  });
 }

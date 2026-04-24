@@ -1,8 +1,17 @@
 import { NextResponse } from "next/server";
-import { listSubscriptions, listTransactions, upsertSubscriptionsFromTransactions } from "@/lib/store";
+import type { NextRequest } from "next/server";
+import { getAuthContext } from "@/lib/auth";
+import { listSubscriptions, refreshSubscriptions } from "@/lib/repository";
 
-export async function GET() {
-  const txs = listTransactions();
-  upsertSubscriptionsFromTransactions(txs);
-  return NextResponse.json(listSubscriptions());
+export async function GET(req: NextRequest) {
+  const context = await getAuthContext(req, true);
+  if (!context) return NextResponse.json({ error: "Nao autenticado." }, { status: 401 });
+  await refreshSubscriptions(context);
+  const subscriptions = await listSubscriptions(context);
+  return NextResponse.json(
+    subscriptions.map((sub) => ({
+      ...sub,
+      amount: Number(sub.amount)
+    }))
+  );
 }

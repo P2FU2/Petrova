@@ -81,6 +81,8 @@ model Profile {
   userId            String   @unique
   preferredName     String?
   objective         String?
+  useType           String?
+  startMode         String?
   familiarityLevel  String?
   onboardingDone    Boolean  @default(false)
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -106,6 +108,7 @@ model UploadedFile {
   status          FileStatus      @default(uploaded)
   periodStart     DateTime?
   periodEnd       DateTime?
+  blobBase64      String?
   createdAt       DateTime        @default(now())
   workspace       Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   parsedDocument  ParsedDocument?
@@ -143,6 +146,7 @@ model Transaction {
   direction           TransactionDirection
   institution         String?
   merchant            String?
+  categoryName        String?
   confidenceScore     Float?
   isRecurring         Boolean              @default(false)
   isSubscription      Boolean              @default(false)
