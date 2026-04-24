@@ -1,0 +1,261 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum FileStatus {
+  uploaded
+  processing
+  parsed
+  needs_review
+  approved
+  failed
+}
+
+enum TransactionDirection {
+  income
+  expense
+  transfer
+}
+
+enum AlertType {
+  period_incomplete
+  unusual_spending
+  category_above_average
+  subscription_detected
+  bill_due
+  bill_overdue
+  duplicate_transaction
+  low_confidence_classification
+}
+
+model User {
+  id             String            @id @default(cuid())
+  email          String            @unique
+  passwordHash   String
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  workspaces     WorkspaceMember[]
+  profile        Profile?
+  conversations  AIConversation[]
+}
+
+model Workspace {
+  id            String            @id @default(cuid())
+  name          String
+  kind          String
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  members       WorkspaceMember[]
+  accounts      FinancialAccount[]
+  files         UploadedFile[]
+  transactions  Transaction[]
+  categories    Category[]
+  subscriptions Subscription[]
+  bills         Bill[]
+  assets        Asset[]
+  liabilities   Liability[]
+  cashflows     CashflowSnapshot[]
+  netWorths     NetWorthSnapshot[]
+  alerts        Alert[]
+}
+
+model WorkspaceMember {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        String
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+}
+
+model Profile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  preferredName     String?
+  objective         String?
+  familiarityLevel  String?
+  onboardingDone    Boolean  @default(false)
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model FinancialAccount {
+  id            String        @id @default(cuid())
+  workspaceId   String
+  name          String
+  institution   String?
+  accountType   String
+  currency      String        @default("BRL")
+  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  transactions  Transaction[]
+}
+
+model UploadedFile {
+  id              String          @id @default(cuid())
+  workspaceId     String
+  filename        String
+  mimeType        String
+  documentType    String?
+  status          FileStatus      @default(uploaded)
+  periodStart     DateTime?
+  periodEnd       DateTime?
+  createdAt       DateTime        @default(now())
+  workspace       Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parsedDocument  ParsedDocument?
+  transactions    Transaction[]
+}
+
+model ParsedDocument {
+  id            String   @id @default(cuid())
+  uploadedFileId String  @unique
+  confidence    Float
+  rawText       String?
+  metadataJson  Json?
+  uploadedFile  UploadedFile @relation(fields: [uploadedFileId], references: [id], onDelete: Cascade)
+}
+
+model Category {
+  id          String        @id @default(cuid())
+  workspaceId String
+  name        String
+  parentName  String?
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+}
+
+model Transaction {
+  id                  String               @id @default(cuid())
+  workspaceId         String
+  financialAccountId  String?
+  uploadedFileId      String?
+  categoryId          String?
+  date                DateTime
+  descriptionRaw      String
+  descriptionClean    String
+  amount              Decimal              @db.Decimal(18, 2)
+  direction           TransactionDirection
+  institution         String?
+  merchant            String?
+  confidenceScore     Float?
+  isRecurring         Boolean              @default(false)
+  isSubscription      Boolean              @default(false)
+  isInternalTransfer  Boolean              @default(false)
+  needsReview         Boolean              @default(false)
+  createdAt           DateTime             @default(now())
+  workspace           Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account             FinancialAccount?    @relation(fields: [financialAccountId], references: [id], onDelete: SetNull)
+  uploadedFile        UploadedFile?        @relation(fields: [uploadedFileId], references: [id], onDelete: SetNull)
+  category            Category?            @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+}
+
+model Subscription {
+  id                String    @id @default(cuid())
+  workspaceId       String
+  name              String
+  amount            Decimal   @db.Decimal(18, 2)
+  frequency         String
+  lastChargeDate    DateTime?
+  nextChargeDate    DateTime?
+  isEssential       Boolean   @default(false)
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model Bill {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  beneficiary   String
+  amount        Decimal   @db.Decimal(18, 2)
+  dueDate       DateTime
+  status        String
+  barcode       String?
+  category      String?
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model Asset {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  name          String
+  assetType     String
+  amount        Decimal   @db.Decimal(18, 2)
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model Liability {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  name          String
+  liabilityType String
+  amount        Decimal   @db.Decimal(18, 2)
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model CashflowSnapshot {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  monthRef      String
+  totalIncome   Decimal   @db.Decimal(18, 2)
+  totalExpense  Decimal   @db.Decimal(18, 2)
+  netAmount     Decimal   @db.Decimal(18, 2)
+  createdAt     DateTime  @default(now())
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model NetWorthSnapshot {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  monthRef        String
+  grossAmount     Decimal   @db.Decimal(18, 2)
+  netAmount       Decimal   @db.Decimal(18, 2)
+  liquidityAmount Decimal   @db.Decimal(18, 2)
+  createdAt       DateTime  @default(now())
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model Alert {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  type          AlertType
+  title         String
+  description   String
+  isRead        Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model AIConversation {
+  id            String      @id @default(cuid())
+  userId        String
+  workspaceId   String
+  createdAt     DateTime    @default(now())
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages      AIMessage[]
+}
+
+model AIMessage {
+  id               String         @id @default(cuid())
+  conversationId   String
+  role             String
+  content          String
+  chartSpecJson    Json?
+  createdAt        DateTime       @default(now())
+  conversation     AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  actorId       String?
+  action        String
+  entityType    String
+  entityId      String?
+  metadataJson  Json?
+  createdAt     DateTime @default(now())
+}
