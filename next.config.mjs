@@ -1,7 +1,15 @@
 import withPWA from "next-pwa";
+import path from "node:path";
 
 const nextConfig = {
-  reactStrictMode: true
+  reactStrictMode: true,
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...(config.resolve.alias || {}),
+      "@": path.resolve(process.cwd(), "src")
+    };
+    return config;
+  }
 };
 
 export default withPWA({
