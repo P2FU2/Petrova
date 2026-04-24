@@ -5,6 +5,13 @@ import { Pie, PieChart, ResponsiveContainer, Tooltip, Cell, BarChart, Bar, XAxis
 import type { AlertRecord, BillRecord, ChatMessage, OnboardingData, SubscriptionRecord, UploadedFileRecord } from "@/lib/types";
 
 const COLORS = ["#2f6df6", "#00c49f", "#ffbb28", "#ff8042", "#a855f7", "#10b981", "#f43f5e"];
+const CHART_TOOLTIP_STYLE = {
+  borderRadius: "12px",
+  border: "1px solid rgba(148,163,184,0.28)",
+  boxShadow: "0 8px 26px rgba(15,23,42,0.12)",
+  background: "var(--bg-soft)",
+  color: "var(--text)"
+};
 
 interface DashboardSummary {
   income: number;
@@ -241,7 +248,9 @@ export default function PetrovaApp() {
   if (!authChecked) {
     return (
       <main className="grid min-h-screen place-items-center bg-slate-50">
-        <p className="text-sm text-slate-500">Preparando Petrova...</p>
+        <div className="card-premium fade-in-up p-6">
+          <p className="text-sm">Preparando Petrova...</p>
+        </div>
       </main>
     );
   }
@@ -249,9 +258,9 @@ export default function PetrovaApp() {
   if (!authenticated) {
     return (
       <main className="grid min-h-screen place-items-center bg-gradient-to-b from-slate-50 to-slate-100 p-4">
-        <section className="card-premium w-full max-w-md p-6">
+        <section className="card-premium surface-glow fade-in-up w-full max-w-md p-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">Petrova</p>
-          <h1 className="mt-2 text-2xl font-semibold text-slate-900">Acesse sua central financeira</h1>
+          <h1 className="mt-2 text-2xl font-semibold">Acesse sua central financeira</h1>
           <p className="text-muted mt-1 text-sm">Experiencia simples, dados robustos e privacidade por padrao.</p>
 
           <div className="mt-5 flex gap-2 rounded-xl bg-slate-100 p-1">
@@ -303,10 +312,11 @@ export default function PetrovaApp() {
 
   return (
     <main className="min-h-screen">
-      <header className="mx-auto mb-6 flex max-w-7xl items-center justify-between px-4 pt-6 md:px-6">
+      <header className="mx-auto mb-6 flex max-w-7xl items-center justify-between px-4 pt-6 md:px-6 fade-in-up">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">Petrova</p>
           <h1 className="mt-1 text-2xl font-semibold">Copiloto financeiro premium</h1>
+          <p className="text-muted mt-1 text-sm">Clareza, controle e insights em uma interface minimalista.</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={toggleTheme} className="btn-ghost px-3 py-2 text-sm transition hover:scale-[1.02]">
@@ -320,7 +330,7 @@ export default function PetrovaApp() {
 
       {!onboarding.completed ? (
         <section className="mx-auto grid max-w-5xl gap-4 px-4 pb-8 md:grid-cols-2 md:px-6">
-          <div className="card-premium p-6">
+          <div className="card-premium surface-glow fade-in-up p-6">
             <h2 className="text-lg font-semibold">Onboarding conversacional</h2>
             <p className="text-muted mt-1 text-sm">
               Responda o essencial e eu monto seu ambiente financeiro em menos de 1 minuto.
@@ -358,7 +368,7 @@ export default function PetrovaApp() {
               <button className="btn-primary px-4 py-2 font-medium">Continuar</button>
             </form>
           </div>
-          <div className="card-premium p-6">
+          <div className="card-premium fade-in-up stagger-1 p-6">
             <h2 className="text-lg font-semibold">Fluxo premium simplificado</h2>
             <p className="text-muted mt-2 text-sm">Converse, envie arquivos e aprove transacoes em poucos cliques. Sem menus complexos.</p>
           </div>
@@ -366,7 +376,7 @@ export default function PetrovaApp() {
       ) : (
         <section className="mx-auto grid max-w-7xl gap-4 px-4 pb-8 lg:grid-cols-[1.35fr_1fr] md:px-6">
           <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 fade-in-up">
               {isDataLoading ? (
                 <>
                   <MetricCardSkeleton />
@@ -384,7 +394,7 @@ export default function PetrovaApp() {
               )}
             </div>
 
-            <div className="card-premium p-5">
+            <div className="card-premium surface-glow fade-in-up stagger-1 p-5">
               <h2 className="text-lg font-semibold">Upload Center</h2>
               <p className="text-muted mt-1 text-sm">Envie CSV, Excel, PDF ou imagem. O processamento e assíncrono e seguro.</p>
               <label className="mt-4 flex cursor-pointer items-center justify-center rounded-xl border border-dashed p-6 text-sm transition hover:scale-[1.01]">
@@ -400,8 +410,9 @@ export default function PetrovaApp() {
                 />
               </label>
               <div className="mt-4 space-y-2">
+                {files.length === 0 && <EmptyState text="Nenhum arquivo enviado ainda. Envie seu primeiro extrato para iniciar a análise." />}
                 {files.slice(0, 4).map((file) => (
-                  <div key={file.id} className="rounded-lg border p-2 text-sm transition hover:scale-[1.01]">
+                  <div key={file.id} className="rounded-lg border p-2 text-sm transition hover:scale-[1.01] fade-in-up">
                     <div className="flex items-center justify-between gap-2">
                       <div>
                         <p className="font-medium">{file.filename}</p>
@@ -429,7 +440,7 @@ export default function PetrovaApp() {
               </button>
             </div>
 
-            <div className="card-premium p-5">
+            <div className="card-premium fade-in-up stagger-2 p-5">
               <h2 className="text-lg font-semibold">Visualizacao automatica</h2>
               <div className="mt-4 h-64">
                 {isDataLoading ? (
@@ -442,7 +453,7 @@ export default function PetrovaApp() {
                           <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value) => money(Number(value))} />
+                      <Tooltip formatter={(value) => money(Number(value))} contentStyle={CHART_TOOLTIP_STYLE} />
                     </PieChart>
                   </ResponsiveContainer>
                 )}
@@ -451,13 +462,13 @@ export default function PetrovaApp() {
           </div>
 
           <div className="space-y-4">
-            <div className="card-premium p-5">
+            <div className="card-premium surface-glow fade-in-up p-5">
               <h2 className="text-lg font-semibold">Copiloto (chat + dados)</h2>
               <div className="mt-3 max-h-72 space-y-2 overflow-y-auto pr-2">
                 {messages.map((msg) => (
                   <div
                     key={msg.id}
-                    className={`rounded-xl p-3 text-sm transition ${msg.role === "assistant" ? "bg-slate-100 dark:bg-slate-800" : "bg-brand-50 text-brand-900"}`}
+                    className={`rounded-xl p-3 text-sm transition ${msg.role === "assistant" ? "bg-slate-100" : "bg-brand-50 text-brand-900"}`}
                   >
                     {msg.content}
                   </div>
@@ -480,14 +491,14 @@ export default function PetrovaApp() {
             </div>
 
             {latestChart && (
-              <div className="card-premium p-5">
+              <div className="card-premium fade-in-up stagger-1 p-5">
                 <h3 className="text-sm font-semibold">{latestChart.title}</h3>
                 <div className="mt-3 h-52">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={latestChart.data}>
                       <XAxis dataKey="name" hide />
                       <YAxis hide />
-                      <Tooltip formatter={(value) => money(Number(value))} />
+                      <Tooltip formatter={(value) => money(Number(value))} contentStyle={CHART_TOOLTIP_STYLE} />
                       <Bar dataKey="value" fill="#2f6df6" radius={[6, 6, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -495,10 +506,10 @@ export default function PetrovaApp() {
               </div>
             )}
 
-            <div className="card-premium p-5">
+            <div className="card-premium fade-in-up stagger-2 p-5">
               <h3 className="text-sm font-semibold">Alertas inteligentes</h3>
               <div className="mt-3 space-y-2">
-                {alerts.length === 0 && <p className="text-muted text-sm">Sem alertas no momento.</p>}
+                {alerts.length === 0 && <EmptyState text="Sem alertas no momento. Quando surgir algo importante, aparece aqui." />}
                 {alerts.slice(0, 5).map((alert) => (
                   <div key={alert.id} className="rounded-lg border p-2 text-sm transition hover:scale-[1.01]">
                     <p className="font-medium">{alert.title}</p>
@@ -508,10 +519,10 @@ export default function PetrovaApp() {
               </div>
             </div>
 
-            <div className="card-premium p-5">
+            <div className="card-premium fade-in-up stagger-3 p-5">
               <h3 className="text-sm font-semibold">Assinaturas detectadas</h3>
               <div className="mt-3 space-y-2">
-                {subscriptions.length === 0 && <p className="text-muted text-sm">Nenhuma assinatura detectada ainda.</p>}
+                {subscriptions.length === 0 && <EmptyState text="Nenhuma assinatura detectada ainda." />}
                 {subscriptions.slice(0, 5).map((sub) => (
                   <div key={sub.id} className="rounded-lg border p-2 text-sm transition hover:scale-[1.01]">
                     <p className="font-medium">{sub.name}</p>
@@ -523,7 +534,7 @@ export default function PetrovaApp() {
               </div>
             </div>
 
-            <div className="card-premium p-5">
+            <div className="card-premium fade-in-up stagger-3 p-5">
               <h3 className="text-sm font-semibold">Boletos e vencimentos</h3>
               <div className="mt-3 grid gap-2">
                 <input
@@ -550,7 +561,7 @@ export default function PetrovaApp() {
                 </button>
               </div>
               <div className="mt-3 space-y-2">
-                {bills.length === 0 && <p className="text-muted text-sm">Sem boletos cadastrados.</p>}
+                {bills.length === 0 && <EmptyState text="Sem boletos cadastrados." />}
                 {bills.slice(0, 5).map((bill) => (
                   <div key={bill.id} className="rounded-lg border p-2 text-sm transition hover:scale-[1.01]">
                     <p className="font-medium">{bill.beneficiary}</p>
@@ -584,4 +595,8 @@ function MetricCardSkeleton() {
       <div className="skeleton mt-3 h-7 w-28" />
     </div>
   );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return <div className="empty-state text-sm">{text}</div>;
 }

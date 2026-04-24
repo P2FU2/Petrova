@@ -8,18 +8,20 @@ export async function GET() {
       {
         status: "ok",
         service: "petrova-web",
+        database: "up",
         timestamp: new Date().toISOString()
       },
-      { status: 200 }
+      { status: 200, headers: { "Cache-Control": "no-store" } }
     );
   } catch {
     return NextResponse.json(
       {
         status: "degraded",
         service: "petrova-web",
+        database: "down",
         timestamp: new Date().toISOString()
       },
-      { status: 503 }
+      { status: 200, headers: { "Cache-Control": "no-store" } }
     );
   }
 }
