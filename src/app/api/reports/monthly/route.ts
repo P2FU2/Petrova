@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="relatorio-finance-os-${new Date().toISOString().slice(0, 10)}.pdf"`
+        "Content-Disposition": `attachment; filename="relatorio-petrova-${new Date().toISOString().slice(0, 10)}.pdf"`
       }
     });
   }

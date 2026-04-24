@@ -1,7 +1,7 @@
 # Estrutura de Pastas Proposta
 
 ```text
-finance-os/
+petrova/
   docs/
     architecture-diagnosis.md
     folder-structure.md

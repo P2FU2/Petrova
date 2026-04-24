@@ -19,7 +19,7 @@ function money(value: number) {
 }
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("finance_os_token") : null;
+  const token = typeof window !== "undefined" ? localStorage.getItem("petrova_token") : null;
   const response = await fetch(url, {
     ...init,
     headers: {
@@ -32,7 +32,7 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
   return response.json();
 }
 
-export default function FinanceOsApp() {
+export default function PetrovaApp() {
   const [onboarding, setOnboarding] = useState<OnboardingData>({ completed: false });
   const [summary, setSummary] = useState<DashboardSummary>({ income: 0, expense: 0, transfers: 0, net: 0, totalTransactions: 0 });
   const [categories, setCategories] = useState<Array<{ name: string; value: number }>>([]);
@@ -72,13 +72,13 @@ export default function FinanceOsApp() {
 
   useEffect(() => {
     (async () => {
-      if (!localStorage.getItem("finance_os_token")) {
+      if (!localStorage.getItem("petrova_token")) {
         const demo = await fetch("/api/auth/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ demo: true })
         }).then((r) => r.json());
-        if (demo.token) localStorage.setItem("finance_os_token", demo.token);
+        if (demo.token) localStorage.setItem("petrova_token", demo.token);
       }
       await refreshData();
     })().catch(console.error);
@@ -105,7 +105,7 @@ export default function FinanceOsApp() {
   async function handleUpload(file: File) {
     const formUpload = new FormData();
     formUpload.append("file", file);
-    const token = localStorage.getItem("finance_os_token");
+    const token = localStorage.getItem("petrova_token");
     const upload = await fetch("/api/files/upload", {
       method: "POST",
       body: formUpload,
@@ -157,13 +157,13 @@ export default function FinanceOsApp() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `finance-os-relatorio-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `petrova-relatorio-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }
 
   async function exportMonthlyPdf() {
-    const token = localStorage.getItem("finance_os_token");
+    const token = localStorage.getItem("petrova_token");
     const response = await fetch("/api/reports/monthly?format=pdf", {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined
     });
@@ -171,7 +171,7 @@ export default function FinanceOsApp() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `finance-os-relatorio-${new Date().toISOString().slice(0, 10)}.pdf`;
+    link.download = `petrova-relatorio-${new Date().toISOString().slice(0, 10)}.pdf`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -179,7 +179,7 @@ export default function FinanceOsApp() {
   return (
     <main className="mx-auto min-h-screen max-w-7xl p-4 md:p-6">
       <header className="mb-6 rounded-2xl bg-white p-5 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">Finance OS</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">Petrova</p>
         <h1 className="mt-2 text-2xl font-bold text-slate-900">Copiloto financeiro simples por fora, poderoso por dentro</h1>
       </header>
 

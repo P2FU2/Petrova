@@ -1,5 +1,5 @@
-import FinanceOsApp from "@/components/finance-os-app";
+import PetrovaApp from "@/components/finance-os-app";
 
 export default function HomePage() {
-  return <FinanceOsApp />;
+  return <PetrovaApp />;
 }

@@ -1,4 +1,4 @@
-# Finance OS (MVP)
+# Petrova (MVP)
 
 Plataforma financeira chat-first para organizacao de gastos, fluxo de caixa e inicio de consolidacao patrimonial com IA.
 
@@ -74,9 +74,11 @@ Variáveis obrigatórias no service web:
 - `REDIS_URL` (referência do plugin Redis)
 - `JWT_SECRET` (string forte gerada por voce)
 - `NODE_ENV=production`
-- `NEXT_PUBLIC_APP_NAME=Finance OS`
+- `NEXT_PUBLIC_APP_NAME=Petrova`
 
 ### 4) Criar service worker
+
+Observacao: no Railway nao existe um tipo "Worker" separado na lista. Voce cria outro service com o mesmo repositório e muda somente o comando de start.
 
 1. Duplique o service web (ou crie novo apontando para o mesmo repo).
 2. Troque apenas o Start command para:
